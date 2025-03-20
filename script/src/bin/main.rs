@@ -10,6 +10,8 @@
 //! RUST_LOG=info cargo run --release -- --prove
 //! ```
 
+use std::str::FromStr;
+
 use alloy::{
     hex::FromHex,
     primitives::{address, b256, fixed_bytes, keccak256, Address, Keccak256},
@@ -19,10 +21,12 @@ use alloy::{
     sol_types,
     transports::http::reqwest,
 };
+use alloy_rlp::Encodable;
 use alloy_sol_types::SolType;
 use clap::Parser;
 use obsidian_lib::{
     decoder::NodeDecoder,
+    header::LeanHeader,
     states::uni_v2,
     verifier::{Node, Proofs, VerifierInputs},
 };
@@ -41,122 +45,123 @@ struct Args {
     #[clap(long)]
     prove: bool,
 
-    #[clap(long, default_value = "20")]
-    n: u32,
+    #[clap(long)]
+    local: bool,
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     // Setup the logger.
     sp1_sdk::utils::setup_logger();
     dotenv::dotenv().ok();
 
-    // Parse the command line arguments.
     let args = Args::parse();
 
-    // let rpc_url = "https://eth.llamarpc.com";
+    let rpc_url = "https://eth.llamarpc.com";
+    let uniswap_storage_slot = vec![b256!(
+        "0000000000000000000000000000000000000000000000000000000000000008"
+    )];
 
-    // let provider = ProviderBuilder::new().on_http(reqwest::Url::from_str(rpc_url).unwrap());
-    // let latest = provider
-    //     .get_block_by_number(rpc::types::BlockNumberOrTag::Latest)
-    //     .await
-    //     .unwrap()
-    //     .unwrap();
+    let pool_address = address!("0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc");
+    let provider = ProviderBuilder::new().on_http(reqwest::Url::from_str(rpc_url).unwrap());
+    let latest = provider
+        .get_block_by_number(rpc::types::BlockNumberOrTag::Latest)
+        .await
+        .unwrap()
+        .unwrap();
 
-    // let mut buffer = Vec::<u8>::new();
+    println!("latest block {}", latest.header.number);
+    let mut buffer = Vec::<u8>::new();
 
-    // latest.header.inner.encode(&mut buffer);
-    // let header = keccak256(buffer);
-    // println!("{:0x} {:0x}", header, latest.header.hash);
+    latest.header.inner.encode(&mut buffer);
+    let header = keccak256(buffer);
+    println!("{:0x} {:0x}", header, latest.header.hash);
 
-    // let keys = vec![b256!(
-    //     "0000000000000000000000000000000000000000000000000000000000000008"
-    // )];
-    // let proof: rpc::types::EIP1186AccountProofResponse = provider
-    //     .get_proof(address!("B4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc"), keys)
-    //     .await
-    //     .unwrap();
+    let proof: rpc::types::EIP1186AccountProofResponse = provider
+        .get_proof(pool_address, uniswap_storage_slot.clone())
+        .await
+        .unwrap();
 
-    // println!("{}", serde_json::to_value(proof).unwrap());
+    println!(
+        "expected {:0x?}",
+        (proof
+            .clone()
+            .storage_proof
+            .first()
+            .unwrap()
+            .value
+            .to_be_bytes_vec())
+    );
 
-    let parsed = serde_json::from_str::<rpc::types::EIP1186AccountProofResponse>(
-        r#"{"accountProof":["0xf90211a04291d67f5c4b0d7a6a9d0b798a5cec5a9ffeaf6efccb3ad8fa5ee2a3b36e1198a091aee9b961111f1f5129160d7ccd7fb8137bfc2edfe5460969abf380f9837be5a009285bfcb02bd73b6c6a6b0f439134b30d9ab6f4874ad1f58e3767e69ff42f0da03cf10f32be86899ca3718c83b4658c2a4ab0d990b828b7384ce66e4feda50b8fa06839f2f1905acce9894cd11a2843206c9052cd75cd0e365da6ffeeb584eb6679a0f85cd1cdb7fcaeefd6a00bbb2b1cc288ed2656139de28235603259a94c7f4e47a051ca5305beefadeb9c247c8b91cb9a97092aff5246f476ea7b9965a236c7dc8ea0f7e234d536048c1012888c469669cf3c2110c36d11d72f9f808111c21cd85ffea0d0f080fb7c788188adffc30a40c4fbf6fd8b42db369afe1d0806fbfb98469961a0285a4d4aa5113f6fd527c517e8614eb5da4cd0fcc5b760385268c95c3b2f9fe2a09f934e7e31244c1d9fc50afffc11d022b7073f491b11d08a6b7ff350ab2287ada0e847f3e7e0c81dc866ac8bdbd1d8aa0b7e74a6825743db21edd2b21a474a7967a0ec413fea91f19c749aa0a86cadbfac39c78360f68a66c3f4e6d26efa59b8507fa0e804f1fbc87b7fa4d827eed72c7992f509dd1d5dbb7716f9b7bf03f8776c836ba070ac73a2ea66414330e675f9b8b7175388b84f58f94fd44ed3604d2960ff3007a09bf3be05544061354b6406a0db00201519ecbd069db35fb02f072961c63ff44880","0xf90211a0b888d6c8823e009a3fbcdbb874aa73e6fa64cfa4729597d917cc55ed3b47a40ba0fa9c292490b0b659f79a11a609c3f6d84ce5fb8ae8cf00292f950433e26326d6a07abb58c53a4ee7f3609d2bde3b4fb43a4ce25b5770a3b8677da596b4fec8a725a082aac67ab2bf2b0fe0200e228e53e425ebe1ecd7e2a9c5debbb9d73c5ac1354ba01921c963a6c530c161975a3fc80fe675796ea4dd626b01fe4a84a5abdeae8310a05aa8a36af60c946e55fc186b9e01e8c2ea792cffab722a0cd5d183a9255dba2ca0fbbd1a530614c74b59e6585c0399047f2a5ad6e16bbb38ecbfa285b77f3609dca0402722d2ed63890a7cdeee900e69d980b054a296c447562835c428ffd8a3bb00a04f48e719351109ada818cc521e7d0606393b7a3baf3c51e3cfcc8d439e27625ea063da9f937e3dffd11baf293ad8b460bbf819d4f45ec6e6056c48cbcc5ed44c58a0bbf2075dd77dc4a295a41c5c7383c4019d14f555d0136a6ef37f64d402c88120a0b28a2310b543780361bd3f7326e5142f493e8db4beb2412e3172f05832786a3ca0bf20f97f83b2346ad47906153e83664635d04f45eea01885021867fdb579ebcea03f628406c0f2bcc0f803ad5d69ca29da1dc8fda33db115c3d8d8127fb39409bfa0c13860b484a4ae95a16151146e6083ab1d379cbbb2ff76c19c96dea58c9b6ffba0b7c7c4673c2195649ab87d63ecf5df59130abac7c844aa801cf87fd8ba37834080","0xf90211a0ddfb8081974141c24c71fe8a41c727db28c029400b792c88777cd9c8c9bffe49a0c012524e10070549e0c7f3186c069ba07c291399034c021aad25ec7f510abdb7a01c485fea8195773a80ccbd1eda6a79e9dc8f8bc1ed3a43afea5cd2cd7b51396aa0a958c830e53918019a90d6ebbbd9c6f913cc176ce00050db62118fd969f51f20a0675a9a14e115fb648b7148c0a0e3cb47ad1a8080389c5a0aeccbe9aaf8b1ce86a068f6ade6a697a7c550e19ab6d99875f7a2f7198c769e87cccf7cf98e66ad2729a0d5997f1da36ec6edcf5f14d9ebd160d4c35b774df4f9912a7a78a98b2d86abc2a08099e51c76bad178e8827b24ca76d4d0b90aac0ec770225d1e1f9d954cde08b6a033ff820ba88900a75b3cd6df57c461058a05a5f6c1a232ff9b2d29d7075127d7a0470efe7d997cc142d40cbdba51664ef3ecb1978c263748e7b2c0873b62ba4ae3a0f626d6f9996a108c62ff4fce3dff276d5e29f7ddc183c2a36db2f2003a041ee3a01047108d154e21075123d3773258f38b11ebd6fed013e06daf12d2e9643e3d32a0e44754c4bade1b638bf6174c3e0abe7ea7de1cee7aa212b57b4c1d15037f6312a05ea0c8efe931a4f0f2e49d342ef88bb5c1cf74bc2522f70b174ca9c51600b808a097fc47a9f129eb44580170dbfd473f2666cad5f7c30f6c9dc15a1d2a6153ca9ba077de17691206d90983785cc510808254d14f472a82187a6fba1ea455107be55280","0xf90211a07dfcffd9e5639478c79877cc422b76ce984e28111f966e557998e62defc31746a054b05abb57d25ee3e67b9c766e715368df5d2bd0bbf92f4bea7b3bc3a4bff74fa091c8da2f765d2846edda73851d30ae671f744f0255a59d8b99e18feaf6ed8cc2a06fbc3618ce1cc27d5d6afb02ecd7af7e0d884121a9097d61aecd75006cea04e1a0f81dc12fb28b865c1290b38dd2c9f17d6f37a171754395357d9ff3e09781da33a04b831e8783b4c4973f2cbab405cd390d043ae3d48c36c07a83fab31a8c8779a4a00fe59a3b227614720ea02607aaa42e6d04ade22274039a9c0599e43c8934fdfca0a6dafeda0457ea739800210471cfc71bf6af3f3ee484d5ba19722a4ca8ea6fe4a076656796eaeca65987d0ab5e30e0d86f4044606b0be5ad39cee29a2ddd9c5ed2a0da83af7409659ed9c1b151850adb734d85dd68ca71d8c91b75881de21f5c5661a0b20cdfe5142e3b5fba84d238f8f35cb068db509dbe9298af74b9f4f46c6b419da00dc17d35dfa04bcd3d54dce52f3da67e0db1c304e7e529475a19127cbc7ebc2da0bc83984bf805c7cb3c1f07bf44a1147d32135feb8aa5da919cc78469d8433d88a0540b657d619ad49fcaa8db20f80c812e80a0eb8dde2a8c2909ac98f3d2208149a0d1887a90f20af811b192aa222ea8370ecad66d54977367d56a22144be34b5d9ca09323b134764edaa1a6d8c7f88fe2ae684d916e2c0640e3d4b15e943609ed62ad80","0xf90211a050cc36e55f707d0810d7a325044cf89388ab86039e36fcdf97524977e0d4a3d9a0c0fab2ebebe6808d8a87fd429457df0c1ac439d6dfe5d3f828731f55e44b911ea0d2579221b04dafe40bb97b3df4441d94678a69a7af4f26c98a6a7712e814b6d7a03094d9ea2ecba5490fe5a45bd53e7fc967f56584314b8d2c6c869e6470d4ada3a05e930eba38786927439e7ca714bf6b7f46434d8385aa0ee5fba29eddd45caa9ca0aa28f61bda2e1adffc9f4b2ef7df430b4e157a886a56f197cda2a334141bca22a0d8dab0abbe14cd7464e56acf0ac879134a7fb3c3a62112a01df89756f2b6d20da04fd65faa855ff6022b4db328ab57d480a59d1b9d7d7830e179d3af9ce524d4d0a0484355aa02a326f861bd546a0772409039981d96db9cfeee03bfafc25542710ba0157a3de572a1c47b459874e8774a3e835a0c4c7fc0eb4701579ee8b27990f3d0a0c93b9d17dc803c874ff32fba390656d9d6982dbdc05f9f9d2a5f8543f7c0da87a0a71caa3595c218985695cdf7efe94272494d55f3fd1441c32bab67e977dfa0e2a02301a37a42e69ba8499d333b6ce6d7c177faed65829161eed0e1f8ccbe059645a0280ff86522faebff97f070c216e75c861fae421752b7733266bca69f45dd670ca08fdb67cfa1fcce6722427707c8257f428f23dc22b8c58dd2016c72e5d8b364cea0849138f217881403e51c4144fcd30b6075461cd6a6aac1853d5913b8dce612a280","0xf90211a0ea98da81a01829002cf44a1582bfccb3953473a669b9c22b1dac65fd77502f4da003446ff580491b9501552e080f1de1c5ba90deef673e98fa925c2abea074016fa0a7aa235c19d1b3d9976e799fb9d0cfa94dbe24296b98e1d44c0bb7ebe83e9175a0be17ce909b297e0b6c2930ba3c94621da281261754c8bc3320013b2e15757c90a0eb36f65f964f05c12f101812c0f2203771a2a465ff9a68a4463989c8f52692aba08f747a84796ae8afbe52930893b0b9c1971620b76580a96781719a3003b9ce88a0f18e873bd326342c08b193e355619afb3974b8098a4c1dfff58139608014b5b0a0886d7990e829cb5c6aa4986e1dbc94296e49053c07cd8fc2dbf66c9650b035a9a015535015d3f2e0ed948093af8a241d3fc1f7da6202dad375aaf825639e33c425a0e6cbf054d7a554c96e8d27be7db5a5d001d205855916316db4690a5e59f2616da0b8eb34f214c56dff70f4c5ddbbf5c095537eaf073a3a313e81b6a480ebb71e03a0bcdfbff026453bdc705b781c06f30e4998f81c6583755516074dcf28b7228252a0c5dd7b08ec09fefe83485c200c71cbada20d71915a8f6c34b54ffd5cb7943904a009b0f0121d594008489ba0c897d46f00bb26dd583ecf249e296eeeba00c1b305a03ed7db875b2dcefbb1691b203260e98691cbbd3ff53c120bfa9729c71b782392a0efa989cc33768af5506a5f60bc871f2cf29895336008b0730a00187c41b3015a80","0xf9013180a0802bf078d7f9db7646ca56a676c6236779f9db03f7a771300319261b975946c280a0b393d7665b5b8927d026245a5c1b21e8f8b25520a9d0b88b88bec2329a025131808080a017e48a0852d550622bcdebb41c1e637716a9501e30d17b388b4317bbd8c8816fa0213bbfa3773f33e2bc1d80ad24a9c52f510964c4b1f20b4e4eb374bde0052bb8a068a57f876b2a86d5202cb0b88a56b70157ea45308ca313ac94c58917316ccf2a8080a0f237bbeebeab55fd3f4ed7a94072801ef390da477710c880f2f31e15fdc91315a038b8947607341f926f155a38ccc62bc57172bb0be9b419de1e46cb04199219f7a0bc137338b1eaac4168e359628d4e44030d51c7d7b446dea00fdbc4465175276fa0a243ff6b74281d79d0b2d05f3236a40825212deadd5b3caef0a90cb42e5ccd3680","0xf8669d369d860ba51e1f38e9568d712cc1015d300e6459b24c6f12dd3bb72fbbb846f8440180a03cf09185bab7b8b5240302e6fff502b4a04279034871fc72170de29569276eeea05b83bdbcc56b2e630f2807bbadd2b0c21619108066b92a58de081261089e9ce5"],"address":"0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc","balance":"0x0","codeHash":"0x5b83bdbcc56b2e630f2807bbadd2b0c21619108066b92a58de081261089e9ce5","nonce":"0x1","storageHash":"0x3cf09185bab7b8b5240302e6fff502b4a04279034871fc72170de29569276eee","storageProof":[{"key":"0x0000000000000000000000000000000000000000000000000000000000000008","proof":["0xf90211a051936c1b942d86fd7fe27926ec080c19fcc68f4f8ca47f6c10ebc0c7f51fb5afa0bad70fd47d69e56587b10dcfaa1be2f2a26aafa1bb6b67d14b09fefb037860d1a0023afc1bdd0dbad7f0195f3888cb0d89496a74dcb7341057af7a86566f6a0fd8a004aeb5e44db5385468fc04fc77f531973efd6fbc1619d05357c6375e32ee8a8ea018ac4062188bc84ff0b7b3c689cef06d792d6f875b5e075c7f5dbc65dbbd0f04a03bc719b70b8bc8111662d11b8b124bbb8ef9ea9905d8df7349487bfdb35ceab4a0595f03bd95cdae43fa3616569a4298ff0b11f3f5d36c3511d952f0f3ba59a190a0e1245e1bb375dd35722af560a5a9a82d6be656cee750c5c95285c131fa7d4075a002b61a388461130399228981bf8ed97b31fd3d84bab7a4a44e70e85942d5f651a0b2567f2b4e249ebaa655ba72b47ae7d42011edb62bc8002209145eab04738712a0938db7b8d2e733768332de30df7c313318446581ebd6812c3bf2152d4d6fca7ba013fc33943b678df87b1e92bd206491ff1de5b10ce81ea27bbb6dfd57edae0fbaa0534c80df6b66761ed9cb69a6d8b897307e482529de4177774869a67464b72227a0e3f9110a63c81b6b379752bcdf4ef812f87b56b093f194726143aa988da6ef7da09bff6263fd011e2679559606fb0ef46b07490be7e3a3dcce4f672f8ccfc733aba00964babe45a5d6c80ddecb95e3b578c3d7567c41b5d7c0172a29f2e04ae774a680","0xf90211a0e02f734817bccaa48666aae4a6114989954213658980afdcfdb374589b73fbeca0633f244d66ed97fa406f10ed4302e7f8dda60567a89b582868873c9e6a395dbea098303f93562361d9d1bc8c5950a19c7a1aef3b28553bceaff04560d36ae68503a0ce7c16b347daf7a0567a4463089a2543872405f74ada67d84703ccc20411e681a00fbda2262e1ff1c5e5a6dc6bd61a0905ac4715a2355d6878b9b510985081100ba0fd05b457d8b69e8551fc4f145efd318b735fa603d5dc68c8e821aff2fe7e222ba0eecdf2e84555886d04f41f6a29105dba2a019135fe5417f1cc7b3b43993ce25fa0696fe515f36968fdd236870811e92af7cef5743ed3088566ad7882a5f0075fada08bdb65ba6475e35e229ce2925db457a15d125bf28ab2ae583861a8f25e1edeeaa030593cbc306736d58a1179fe3963bab90f8c651af7916ad393a20cc9edade238a0b61a104168bd6a13ea6cf0f7d05f198de576dfcb695ec3ddb6729a34039f6b27a0b2e2038a34b821f85e34a0a0f5532f25142069a9871206b5f00df9dac09b9b3da00504a5d80e6cc05e4840d25e05e9f77a00e5e06b971da02eb1c4698b2a8ab054a0ffe2ef4b74367ed1a88ba4d454ba42ef476d72333ccb805585a1a673cf18d4dda0f09efea0d0703f481b29b25792d34971c2edbc744b93f0181383472dc3f6d26da0e71ce6b59d33ea75b6c189e69bf7701d18560c15e3d0ca980dbb53b8abed2e9e80","0xf90211a0fb89648be35325b35f3b4a60c677c60fdbb59264dd692b8cd89c0d4de9efbaeba0d0fd1085e689f8454c727231fda817d45ae3f4f87c6a95193aba46408dd708cca0953a08b7b51ad08a08e3d40ce6ca0cdc1593c166a5d24b532237a6eea7992b4fa09d5e91d5e1860b9b371a18fbcf7cde2d56a7cf8f6bed07584cd4971feccea96aa0d0c2f8e01317ac1ce8cadd4e42977cee2f5e296e226de3065ca5a94e021114a7a0d6d82ef528b0363bc22d8dabdee4c6c257bb68919031066751be7e03b6f84fb4a089396ca6cae4eefce0f5f47982bb0febb5dc656a3b92fa9916c4f83fa3fc8c20a07d331056a11dd6ae89341df13bc7d1fa2be6b60f560403090719940c28cc1886a0d7f3c1091594e350e4b2d36131cfd09ea998e78da41634e6237391efe2e5930fa018448324cafa58e78ec23262ba3a3eca34efa58765c56105e9693094c675ddcca0520006d4b265f953a8455a0f9d578a9ec147b141e914d383f5435c7bd97e26f4a076a31acb3d599a93c845be0d63fb385190eb1d1bd233c558e667943e96d9ed05a0ad1d9460ec7399d5c915aa84e92d6602a316f2eafe896fb0e2d531017dc95fa1a063a9fcd5dc44d2e3a8b4de28f88375979ec97e9589fec8818ce86c376a6363f6a0d76d85a5bdc1f0fb654105da32c81c5b863a60d3bbda7bb1b61bb7cf53aeeed3a0422ffa9b419adec71d7513f4a5def95007901503a2409b87df9618332c26da8580","0xf8d180a0987df145891f14d81da5c9275d41d0030c7828561cc3e4401c09c8601d7809c98080a0d159f2340dcd2aa00356ba16ef8146deb1cc0a5344e8bb2945678a6f65bd3b848080a0104bb0683d344bcb0679f026483944e23f0550f83181da9bc96f8ce08eb958a380a00b13224dab741bd576777ef78168029e748b1485251048b70701d1a463e8d16fa0f6bf49eb7363ea14e85715dae645820f91cab1fe97e86a3f81512e0411c9f654808080a028cbe294179ae6d384a48c57c4077710253ce13edf86a274bb6ca67167ab47c98080","0xf8518080a0d7d1532b8fbb80fb5fc74c801351673b246932f805d58861daeb9359d25cf56b80808080808080a020dde6c276522a89fa0767cd152a25be9e6f78d70dc8d6f91399f9288cc2158f808080808080","0xf8419e39fe364faab93b216da50a3214154f22a0a2b415b23a84c8169e8b636ee3a1a067d980730000000001158c2b345e24a9ce91000000000000000008c1f47d6e4f"],"value":"0x67d980730000000001158c2b345e24a9ce91000000000000000008c1f47d6e4f"}]}"#,
-    ).unwrap();
     let mut account_collector: Vec<Vec<u8>> = Vec::new();
-    for acc in parsed.account_proof {
+    for acc in proof.account_proof.clone() {
         account_collector.push(acc.to_vec());
     }
 
+    let slots = proof.storage_proof.clone();
     let mut storage_collector: Vec<Vec<u8>> = Vec::new();
-    for acc in parsed.storage_proof.first().unwrap().clone().proof {
+    for acc in slots.first().unwrap().clone().proof {
         storage_collector.push(acc.to_vec());
     }
 
-    let state_root =
-        fixed_bytes!("0xfa1530e6b9e0117def13b5bff87b0de51ef94d5c08fe7631c80b1d5e54b9421c").to_vec();
-    let key = address!("0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc");
-    let slot =
-        fixed_bytes!("0x0000000000000000000000000000000000000000000000000000000000000008").to_vec();
     let inputs = VerifierInputs {
-        state_root,
-        address: key.to_vec(),
-        storage_slot: slot,
+        header: LeanHeader::from(latest.header.inner),
+        address: pool_address.to_vec(),
+        storage_slot: uniswap_storage_slot.first().unwrap().to_vec(),
         proofs: Proofs {
             account_proof: account_collector,
             storage_proof: storage_collector,
         },
     };
 
-    // parsed.account_proof.get(0);
-
-    // print!("{}", out.0.len());
-
-    if args.execute == args.prove {
-        eprintln!("Error: You must specify either --execute or --prove");
+    if !args.execute && !args.prove && !args.local {
+        eprintln!("Error: You must specify either --execute or --prove or --local");
         std::process::exit(1);
     }
 
-    // Setup the prover client.
-    let client = ProverClient::from_env();
-
-    // Setup the inputs.
-    let mut stdin = SP1Stdin::new();
-    stdin.write(&inputs);
-
-    println!("n: {}", args.n);
-
-    if args.execute {
-        // Execute the program
-        let (output, report) = client.execute(OBSIDIAN_ELF, &stdin).run().unwrap();
-        println!("Program executed successfully.");
-
-        // Read the output.
-
-        println!("{:0x?}", output);
-        // Record the number of cycles executed.
-        println!("Number of cycles: {}", report.total_instruction_count());
+    if args.local {
+        let out = obsidian_lib::verifier::MPTVerifier::verify_slot(inputs);
+        println!("{:0x?}", out)
     } else {
-        // Setup the program for proving.
-        let (pk, vk) = client.setup(OBSIDIAN_ELF);
-        println!("vk: {:?}", vk.bytes32());
+        // setup vms
+        let client = ProverClient::from_env();
+        let mut stdin = SP1Stdin::new();
+        stdin.write(&inputs);
 
-        // Generate the proof
-        let proof = client
-            .prove(&pk, &stdin)
-            .groth16()
-            .run()
-            .expect("failed to generate proof");
+        if args.execute {
+            // Execute the program
+            let (output, report) = client.execute(OBSIDIAN_ELF, &stdin).run().unwrap();
+            println!("Program executed successfully.");
 
-        println!("Successfully generated proof!");
+            // Read the output.
 
-        println!("{:0x?}", proof.public_values);
-        let solidity_proof = proof.bytes();
-        println!("proof: 0x{}", hex::encode(solidity_proof));
-        proof
-            .save("obsidian-groth16.bin")
-            .expect("saving proof failed");
+            println!("{:0x?}", output);
+            // Record the number of cycles executed.
+            println!("Number of cycles: {}", report.total_instruction_count());
+        } else {
+            // Setup the program for proving.
+            let (pk, vk) = client.setup(OBSIDIAN_ELF);
+            println!("vk: {:?}", vk.bytes32());
 
-        // Verify the proof.
-        client.verify(&proof, &vk).expect("failed to verify proof");
-        println!("Successfully verified proof!");
+            // Generate the proof
+            let proof = client
+                .prove(&pk, &stdin)
+                .groth16()
+                .run()
+                .expect("failed to generate proof");
+
+            println!("Successfully generated proof!");
+
+            println!("{:0x?}", proof.public_values);
+            let solidity_proof = proof.bytes();
+            println!("proof: 0x{}", hex::encode(solidity_proof));
+            proof
+                .save("obsidian-groth16.bin")
+                .expect("saving proof failed");
+
+            // Verify the proof.
+            client.verify(&proof, &vk).expect("failed to verify proof");
+            println!("Successfully verified proof!");
+        }
     }
 }
