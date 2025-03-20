@@ -12,11 +12,11 @@
 
 use alloy_sol_types::SolType;
 use clap::Parser;
-use fibonacci_lib::PublicValuesStruct;
+use obsidian_lib::PublicValuesStruct;
 use sp1_sdk::{include_elf, ProverClient, SP1Stdin};
 
 /// The ELF (executable and linkable format) file for the Succinct RISC-V zkVM.
-pub const FIBONACCI_ELF: &[u8] = include_elf!("fibonacci-program");
+pub const FIBONACCI_ELF: &[u8] = include_elf!("obsidian-program");
 
 /// The arguments for the command.
 #[derive(Parser, Debug)]
@@ -66,7 +66,7 @@ fn main() {
         println!("a: {}", a);
         println!("b: {}", b);
 
-        let (expected_a, expected_b) = fibonacci_lib::fibonacci(n);
+        let (expected_a, expected_b) = obsidian_lib::fibonacci(n);
         assert_eq!(a, expected_a);
         assert_eq!(b, expected_b);
         println!("Values are correct!");

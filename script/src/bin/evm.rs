@@ -12,7 +12,7 @@
 
 use alloy_sol_types::SolType;
 use clap::{Parser, ValueEnum};
-use fibonacci_lib::PublicValuesStruct;
+use obisdian_lib::PublicValuesStruct;
 use serde::{Deserialize, Serialize};
 use sp1_sdk::{
     include_elf, HashableKey, ProverClient, SP1ProofWithPublicValues, SP1Stdin, SP1VerifyingKey,
@@ -20,7 +20,7 @@ use sp1_sdk::{
 use std::path::PathBuf;
 
 /// The ELF (executable and linkable format) file for the Succinct RISC-V zkVM.
-pub const FIBONACCI_ELF: &[u8] = include_elf!("fibonacci-program");
+pub const FIBONACCI_ELF: &[u8] = include_elf!("obsidian-program");
 
 /// The arguments for the EVM command.
 #[derive(Parser, Debug)]
