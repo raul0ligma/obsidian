@@ -8,7 +8,8 @@ alloy-sol-types = { workspace = true }
 tiny-keccak = { version = "2.0", features = ["sha3","keccak"] }
 alloy-primitives = "0.8.23"
 serde = "1.0.219"
-
+alloy-consensus = { version =  "0.12.6" }
+alloy-rlp = "0.3.11"
 
 [patch.crates-io]
 tiny-keccak = { git = "https://github.com/sp1-patches/tiny-keccak", package = "tiny-keccak", tag = "patch-2.0.2-sp1-4.0.0" }

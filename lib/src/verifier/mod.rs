@@ -1,4 +1,6 @@
+use crate::header::LeanHeader;
 use alloy_primitives::U256;
+use alloy_sol_types::{sol, SolStruct};
 use serde::{Deserialize, Serialize};
 use tiny_keccak::Hasher;
 
@@ -32,10 +34,16 @@ pub struct Proofs {
 
 #[derive(Serialize, Deserialize)]
 pub struct VerifierInputs {
-    pub state_root: Vec<u8>,
+    pub header: LeanHeader,
     pub address: Vec<u8>,
     pub storage_slot: Vec<u8>,
     pub proofs: Proofs,
+}
+
+#[derive(Debug)]
+pub struct VerifierOutput {
+    pub block_hash: Vec<u8>,
+    pub slot_data: Vec<u8>,
 }
 
 pub type VerifyResultWithData<T> = Result<T, String>;
@@ -186,33 +194,44 @@ impl MPTVerifier {
         let slot_hash = Self::keccak(&slot);
         let out = Self::verify_and_get_data(state_root.to_vec(), &slot_hash, proof).unwrap();
         let decode = NodeDecoder::decode_rlp(&out);
-        if decode.len() == 0 {
+        if decode.is_empty() {
             return Err(format!("no storage found {}", decode.len()));
         }
 
         Ok(decode[0].clone())
     }
 
-    pub fn verify_slot(input: VerifierInputs) -> VerifyResultWithData<Vec<u8>> {
+    pub fn verify_slot(input: VerifierInputs) -> VerifyResultWithData<VerifierOutput> {
+        // compute the block hash here
+        let block_hash = input.header.hash();
+
         let mut account_proofs: Vec<Node> = Vec::new();
         for node in input.proofs.account_proof {
             account_proofs.push(NodeDecoder::decode_mpt_node(&node));
         }
 
-        let account_state =
-            Self::verify_and_get_account_state(&input.state_root, input.address, account_proofs)?;
+        // start from state root
+        let account_state = Self::verify_and_get_account_state(
+            input.header.state_root.as_slice(),
+            input.address,
+            account_proofs,
+        )?;
 
         let mut storage_proofs: Vec<Node> = Vec::new();
         for node in input.proofs.storage_proof {
             storage_proofs.push(NodeDecoder::decode_mpt_node(&node));
         }
 
+        // verify with computed storage hash
         let storage_value = Self::verify_and_get_slot(
             &account_state.storage_hash,
             input.storage_slot,
             storage_proofs,
         )?;
 
-        Ok(storage_value)
+        Ok(VerifierOutput {
+            block_hash: block_hash.to_vec(),
+            slot_data: storage_value,
+        })
     }
 }
