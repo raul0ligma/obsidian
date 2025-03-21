@@ -21,6 +21,7 @@ use alloy::{
     sol_types,
     transports::http::reqwest,
 };
+use alloy_primitives::U256;
 use alloy_rlp::Encodable;
 use alloy_sol_types::SolType;
 use clap::Parser;
@@ -28,7 +29,9 @@ use obsidian_lib::{
     decoder::NodeDecoder,
     header::LeanHeader,
     states::uni_v2,
+    swapper::uni_v2_swapper::{self, SwapInput},
     verifier::{Node, Proofs, VerifierInputs},
+    ObsidianInput,
 };
 use sp1_sdk::{include_elf, HashableKey, ProverClient, SP1Stdin};
 
@@ -62,7 +65,7 @@ async fn main() {
         "0000000000000000000000000000000000000000000000000000000000000008"
     )];
 
-    let pool_address = address!("0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc");
+    let pool_address = address!("0xAE461cA67B15dc8dc81CE7615e0320dA1A9aB8D5");
     let provider = ProviderBuilder::new().on_http(reqwest::Url::from_str(rpc_url).unwrap());
     let latest = provider
         .get_block_by_number(rpc::types::BlockNumberOrTag::Latest)
@@ -119,14 +122,31 @@ async fn main() {
         std::process::exit(1);
     }
 
+    let swap_payload = SwapInput {
+        sell_amount: U256::from(5000000).to_be_bytes_vec(),
+        sell_token0: false,
+        sell_token: address!("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48").to_vec(),
+        buy_token: address!("0x6B175474E89094C44Da98b954EedeAC495271d0F").to_vec(),
+        seller: address!("0xd4f23AfEAcfc05399E58e122B9a23cD04FA02C3B").to_vec(),
+    };
     if args.local {
-        let out = obsidian_lib::verifier::MPTVerifier::verify_slot(inputs);
-        println!("{:0x?}", out)
+        let out = obsidian_lib::verifier::MPTVerifier::verify_slot(inputs).unwrap();
+        println!("{:0x?}", out);
+        let reserves_state: uni_v2::UniV2ReservesState =
+            uni_v2::UniV2ReservesState::try_from(out.slot_data.clone()).unwrap();
+
+        let swap_out = uni_v2_swapper::swap(reserves_state, swap_payload);
+        println!("swap out {:0x?}", swap_out);
+        // let order = pack_order(swap_out, block_number, out.block_hash);
     } else {
+        let vm_input = ObsidianInput {
+            swap_payload,
+            block_verifier_inputs: inputs,
+        };
         // setup vms
         let client = ProverClient::from_env();
         let mut stdin = SP1Stdin::new();
-        stdin.write(&inputs);
+        stdin.write(&vm_input);
 
         if args.execute {
             // Execute the program
