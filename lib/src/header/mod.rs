@@ -150,7 +150,6 @@ impl From<alloy_consensus::Header> for LeanHeader {
         let mut state_root = [0u8; 32];
         let mut transactions_root = [0u8; 32];
         let mut receipts_root = [0u8; 32];
-        let mut logs_bloom = [0u8; 256];
         let mut difficulty = [0u8; 32];
         let mut mix_hash = [0u8; 32];
         let mut nonce = [0u8; 8];
