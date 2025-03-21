@@ -155,7 +155,7 @@ async fn main() {
 
             // Read the output.
 
-            println!("{:0x?}", output);
+            println!("{:0x?}", hex::encode(output.as_slice()));
             // Record the number of cycles executed.
             println!("Number of cycles: {}", report.total_instruction_count());
         } else {

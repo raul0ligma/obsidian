@@ -2,31 +2,36 @@ use actix_web::{web, HttpResponse, Responder};
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+use crate::prover::Prover;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewOrderRequest {
-    chain_id: u64,
-    address: String,
-    commit_block: u64,
-    swap_venue: String,
-    amount: String,
+    pub chain_id: u64,
+    pub address: String,
+    pub commit_block: u64,
+    pub amount: String,
+    pub pool_address: String,
+    pub sell_token: String,
+    pub buy_token: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NewOrderResponse {
-    proof: String,
-    order_id: String,
-    transaction_hash: String,
-    error: Option<String>,
+    pub block: u64,
+    pub proof: String,
+    pub public_values: String,
+    pub error: Option<String>,
 }
 
 pub async fn process_order(order: web::Json<NewOrderRequest>) -> impl Responder {
-    info!("new order {:?}", order);
-    let response = NewOrderResponse {
-        proof: "lol".into(),
-        order_id: "keke".into(),
-        transaction_hash: "wasd".into(),
-        error: None,
-    };
-    debug!("sending response: {:?}", response);
-    HttpResponse::Ok().json(response)
+    let prover = Prover::new(crate::Config {
+        host: String::new(),
+        port: 69,
+        rpc_url: String::from("https://eth.llamarpc.com"),
+    });
+    let proved_order = prover.prove(order.clone()).await;
+    info!("new order {:?}", order.0);
+
+    debug!("sending response: {:?}", proved_order);
+    HttpResponse::Ok().json(proved_order)
 }
