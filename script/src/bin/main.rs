@@ -172,12 +172,12 @@ async fn main() {
 
             println!("Successfully generated proof!");
 
-            println!("{:0x?}", proof.public_values);
+            println!(
+                "public values: 0x{}",
+                hex::encode(proof.clone().public_values)
+            );
             let solidity_proof = proof.bytes();
             println!("proof: 0x{}", hex::encode(solidity_proof));
-            proof
-                .save("obsidian-groth16.bin")
-                .expect("saving proof failed");
 
             // Verify the proof.
             client.verify(&proof, &vk).expect("failed to verify proof");
