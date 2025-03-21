@@ -26,13 +26,13 @@ pub struct AccountState {
     pub nonce: U256,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Proofs {
     pub account_proof: Vec<Vec<u8>>,
     pub storage_proof: Vec<Vec<u8>>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct VerifierInputs {
     pub header: LeanHeader,
     pub address: Vec<u8>,
@@ -119,7 +119,10 @@ impl MPTVerifier {
                 }
                 NodeType::Leaf(is_odd, slug, value) => {
                     let mut slug_nibbles = Self::key_to_nibbles(&slug);
-                    if is_odd {
+                    // always pop first nibble because it has type
+                    slug_nibbles.remove(0);
+                    if !is_odd {
+                        // remove if not odd
                         slug_nibbles.remove(0);
                     }
 
@@ -139,7 +142,10 @@ impl MPTVerifier {
                 }
                 NodeType::Extension(is_odd, slug, next) => {
                     let mut slug_nibbles = Self::key_to_nibbles(&slug);
-                    if is_odd {
+                    // always pop first nibble because it has type
+                    slug_nibbles.remove(0);
+                    if !is_odd {
+                        // remove if not odd
                         slug_nibbles.remove(0);
                     }
 
