@@ -19,7 +19,6 @@ pub mod uni_v2 {
             }
 
             // the reservers are encoded as [4][14][14] = 32
-
             Ok(UniV2ReservesState {
                 block_timestamp_last: U256::from_be_slice(&serialized[..4]),
                 reserve1: U256::from_be_slice(&serialized[5..18]),
