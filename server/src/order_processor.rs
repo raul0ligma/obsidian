@@ -1,5 +1,4 @@
 use actix_web::{web, HttpResponse, Responder};
-use log::{debug, info};
 use serde::{Deserialize, Serialize};
 
 use crate::prover::Prover;
@@ -24,10 +23,32 @@ pub struct NewOrderResponse {
 }
 
 pub async fn process_order(order: web::Json<NewOrderRequest>) -> impl Responder {
-    let prover = Prover::new();
-    let proved_order = prover.prove(order.clone()).await;
-    info!("new order {:?}", order.0);
+    log::info!(
+        "received new order request for pool: {}",
+        order.pool_address
+    );
+    log::debug!("order details: {:?}", order);
 
-    debug!("sending response: {:?}", proved_order);
-    HttpResponse::Ok().json(proved_order)
+    let prover = Prover::new();
+
+    match prover.prove(order.clone()).await {
+        Ok(proved_order) => {
+            log::info!(
+                "successfully processed order for block {}",
+                proved_order.block
+            );
+            log::debug!("sending response: {:?}", proved_order);
+            HttpResponse::Ok().json(proved_order)
+        }
+        Err(error) => {
+            log::error!("order processing failed: {}", error);
+            let error_response = NewOrderResponse {
+                block: 0,
+                proof: String::new(),
+                public_values: String::new(),
+                error: Some(error),
+            };
+            HttpResponse::InternalServerError().json(error_response)
+        }
+    }
 }

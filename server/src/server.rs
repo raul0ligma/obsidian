@@ -25,7 +25,6 @@ impl Server {
         dotenv().ok();
 
         let host = env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
-        let rpc_url = env::var("RPC_URL").unwrap_or_else(|_| "127.0.0.1".to_string());
 
         let port: u16 = env::var("PORT")
             .unwrap_or_else(|_| "8080".to_string())
@@ -33,11 +32,7 @@ impl Server {
             .expect("PORT must be a valid number");
 
         Server {
-            cfg: Config {
-                host,
-                port,
-                rpc_url,
-            },
+            cfg: Config { host, port },
             routes: Vec::new(),
         }
     }
