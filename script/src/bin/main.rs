@@ -139,6 +139,8 @@ async fn main() {
         println!("swap out {:0x?}", swap_out);
         // let order = pack_order(swap_out, block_number, out.block_hash);
     } else {
+        let start = std::time::Instant::now();
+        println!("Starting proof generation");
         let vm_input = ObsidianInput {
             swap_payload,
             block_verifier_inputs: inputs,
@@ -182,6 +184,8 @@ async fn main() {
             // Verify the proof.
             client.verify(&proof, &vk).expect("failed to verify proof");
             println!("Successfully verified proof!");
+
+            println!("Proof generation completed in {:?}", start.elapsed());
         }
     }
 }

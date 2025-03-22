@@ -24,11 +24,7 @@ pub struct NewOrderResponse {
 }
 
 pub async fn process_order(order: web::Json<NewOrderRequest>) -> impl Responder {
-    let prover = Prover::new(crate::Config {
-        host: String::new(),
-        port: 69,
-        rpc_url: String::from("https://eth.llamarpc.com"),
-    });
+    let prover = Prover::new();
     let proved_order = prover.prove(order.clone()).await;
     info!("new order {:?}", order.0);
 
