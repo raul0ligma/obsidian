@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ArrowDownUp, Settings, Info } from "lucide-react";
+import { ArrowBigDown } from "lucide-react";
 import { usePrivy } from "@privy-io/react-auth";
 import {
   useAccount,
@@ -11,22 +11,11 @@ import { createPublicClient, http, parseEther } from "viem";
 import { base } from "viem/chains";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Separator } from "@/components/ui/separator";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
+import { useObsidianTrade } from "@/hooks/useObsidianTrade";
+import { useWethPrice } from "@/hooks/useWethPrice";
+import { Settings } from "lucide-react";
 
 const USDC = {
   id: "usdc",
@@ -36,16 +25,12 @@ const USDC = {
   balance: "1500.00",
 };
 
-const DAI = {
-  id: "dai",
-  symbol: "DAI",
-  name: "Dai",
-  logo: "https://cryptologos.cc/logos/multi-collateral-dai-dai-logo.svg?v=024",
+const WETH = {
+  id: "weth",
+  symbol: "WETH",
+  name: "Wrapped Ether",
+  logo: "https://cryptologos.cc/logos/ethereum-eth-logo.svg?v=024",
   balance: "2300.00",
-};
-
-const getRandomRate = () => {
-  return (0.995 + Math.random() * 0.01).toFixed(6);
 };
 
 interface LogEntry {
@@ -62,56 +47,70 @@ const publicClient = createPublicClient({
 const TradeCard = () => {
   const [fromAmount, setFromAmount] = useState<string>("");
   const [toAmount, setToAmount] = useState<string>("");
-
-  const [exchangeRate, setExchangeRate] = useState<string>(getRandomRate());
   const [slippageTolerance, setSlippageTolerance] = useState<number>(0.5);
-
   const [loading, setLoading] = useState<boolean>(false);
   const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
   const [autoSlippage, setAutoSlippage] = useState<boolean>(true);
-
   const [activeStep, setActiveStep] = useState<number>(-1);
   const [txHash, setTxHash] = useState<string>("");
   const [progress, setProgress] = useState<number>(0);
-
   const [logs, setLogs] = useState<LogEntry[]>([]);
-
   const [blockNumber, setBlockNumber] = useState<number | null>(null);
-  const publicClient = usePublicClient();
+  const [orderServerUrl, setOrderServerUrl] = useState<string>(() => {
+    return localStorage.getItem("orderServerUrl") || "http://127.0.0.1:8069";
+  });
 
-  // Hardcoded solver for demo - in production this would come from your backend
-  const solverAddress = "0x7F5Ac0abC2E4C1eD9561Ba8B0fC0bB3CF2Fd91F9";
+  const addLog = (message: string, type: LogEntry["type"] = "info") => {
+    setLogs((prev) => [
+      ...prev,
+      {
+        timestamp: new Date(),
+        message,
+        type,
+      },
+    ]);
 
-  const { toast } = useToast();
+    // Auto-scroll to latest message
+    requestAnimationFrame(() => {
+      const logContainer = document.querySelector(".overflow-auto");
+      if (logContainer) {
+        logContainer.scrollTop = logContainer.scrollHeight;
+      }
+    });
+  };
 
   const { ready, authenticated } = usePrivy();
   const { address } = useAccount();
   const chainId = useChainId();
   const { data: walletClient } = useWalletClient();
 
-  // Check if connected to Base
+  const solverAddress = "0xd4f23AfEAcfc05399E58e122B9a23cD04FA02C3B";
+
+  const { toast } = useToast();
+
+  const { signOrder } = useObsidianTrade({
+    authenticated,
+    blockNumber,
+    addLog,
+    orderServerUrl,
+  });
+
+  const { exchangeRate, lastUpdated } = useWethPrice();
+
   useEffect(() => {
     if (chainId && chainId !== base.id) {
-      addLog("Please switch to Base network", "warning");
-      // You can use the wallet client to switch networks
       walletClient?.switchChain({ chainId: base.id }).catch((error) => {
         console.error("Failed to switch network:", error);
-        addLog("Failed to switch to Base network", "error");
       });
     }
   }, [chainId, walletClient]);
 
   useEffect(() => {
-    setExchangeRate(getRandomRate());
-    addLog("System initialized", "info");
-    addLog("Connecting to Obsidian network...", "info");
-    setTimeout(() => {
-      addLog("Connected to Obsidian network", "success");
-    }, 1000);
-  }, []);
-
-  useEffect(() => {
-    if (fromAmount && parseFloat(fromAmount) > 0) {
+    if (
+      fromAmount &&
+      parseFloat(fromAmount) > 0 &&
+      parseFloat(exchangeRate) > 0
+    ) {
       const calculatedAmount = (
         parseFloat(fromAmount) * parseFloat(exchangeRate)
       ).toFixed(6);
@@ -182,6 +181,10 @@ const TradeCard = () => {
     switchToBase();
   }, [authenticated, walletClient, chainId]);
 
+  useEffect(() => {
+    localStorage.setItem("orderServerUrl", orderServerUrl);
+  }, [orderServerUrl]);
+
   const handleFromAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     if (value === "" || /^[0-9]*[.,]?[0-9]*$/.test(value)) {
@@ -203,25 +206,6 @@ const TradeCard = () => {
         setFromAmount("");
       }
     }
-  };
-
-  const addLog = (message: string, type: LogEntry["type"] = "info") => {
-    setLogs((prev) => [
-      ...prev,
-      {
-        timestamp: new Date(),
-        message,
-        type,
-      },
-    ]);
-
-    // Auto-scroll to latest message
-    requestAnimationFrame(() => {
-      const logContainer = document.querySelector(".overflow-auto");
-      if (logContainer) {
-        logContainer.scrollTop = logContainer.scrollHeight;
-      }
-    });
   };
 
   const advanceTimeline = (stepIndex: number) => {
@@ -249,63 +233,19 @@ const TradeCard = () => {
   };
 
   const handleTrade = async () => {
-    if (!authenticated || !address || !walletClient) {
-      toast({
-        title: "Connect wallet",
-        description: "Please connect your wallet to trade.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Check chain ID first
-    if (chainId !== base.id) {
-      try {
-        await walletClient.switchChain({ chainId: base.id });
-      } catch (error) {
-        toast({
-          title: "Network Switch Required",
-          description: "Please switch to Base network to continue",
-          variant: "destructive",
-        });
-        return;
-      }
-    }
-
-    if (!fromAmount || parseFloat(fromAmount) <= 0) {
-      toast({
-        title: "Enter amount",
-        description: "Please enter a valid amount to trade.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setLoading(true);
     setActiveStep(0);
     setLogs([]);
 
     try {
-      // Send 1 wei transaction as test
-      const randomAddress = `0x${Array(40)
-        .fill(0)
-        .map(() => Math.floor(Math.random() * 16).toString(16))
-        .join("")}`;
-
-      const hash = await walletClient.sendTransaction({
-        to: randomAddress,
-        value: parseEther("0.000000000000000001"), // 1 wei
-      });
-
-      addLog("Starting new private trade", "info");
-      addLog(`Transaction hash: ${hash}`, "info");
-
-      // Continue with existing trade flow
-      advanceTimeline(0);
-      // ... keep existing timeline code ...
+      const result = await signOrder(fromAmount);
+      if (result) {
+        // Continue with the trade flow using result.signature, result.typedData
+        advanceTimeline(0);
+      }
     } catch (error) {
-      addLog("Transaction failed", "error");
       console.error("Trade error:", error);
+    } finally {
       setLoading(false);
     }
   };
@@ -317,6 +257,36 @@ const TradeCard = () => {
       minute: "2-digit",
       second: "2-digit",
     });
+  };
+
+  const renderServerSettings = () => {
+    if (!settingsOpen) return null;
+
+    return (
+      <div className="space-y-4 p-4 border-t border-neutral-100">
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Order Server URL</label>
+          <div className="flex gap-2">
+            <Input
+              value={orderServerUrl}
+              onChange={(e) => setOrderServerUrl(e.target.value)}
+              placeholder="Enter order server URL"
+              className="flex-1"
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setOrderServerUrl("http://127.0.0.1:8069")}
+            >
+              Reset
+            </Button>
+          </div>
+          <p className="text-xs text-neutral-500">
+            Currently using: {orderServerUrl}
+          </p>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -353,6 +323,14 @@ const TradeCard = () => {
             </span>
           </div>
         </div>
+
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setSettingsOpen(!settingsOpen)}
+        >
+          <Settings className="h-4 w-4" />
+        </Button>
       </div>
 
       {/* Show warning banner if wrong network */}
@@ -419,7 +397,7 @@ const TradeCard = () => {
             className="rounded-full h-9 w-9 shadow-sm bg-black hover:bg-black/90 text-white"
             disabled={true}
           >
-            <ArrowDownUp className="h-4 w-4" />
+            <ArrowBigDown className="h-4 w-4" />
           </Button>
         </div>
 
@@ -438,12 +416,12 @@ const TradeCard = () => {
             <div className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-medium token-selector text-white">
               <div className="relative h-6 w-6 flex-shrink-0">
                 <img
-                  src={DAI.logo}
-                  alt={DAI.symbol}
+                  src={WETH.logo}
+                  alt={WETH.symbol}
                   className="h-full w-full rounded-full object-contain"
                 />
               </div>
-              <span>{DAI.symbol}</span>
+              <span>{WETH.symbol}</span>
             </div>
           </div>
         </div>
@@ -451,8 +429,13 @@ const TradeCard = () => {
         <div className="animate-fade-in">
           <div className="text-xs flex justify-between items-center p-1.5 text-[#8be9fd]/90">
             <div className="flex items-center gap-1">
-              <span>1 USDC = {parseFloat(exchangeRate).toFixed(6)} DAI</span>
+              <span>1 USDC = {parseFloat(exchangeRate).toFixed(6)} WETH</span>
             </div>
+            {lastUpdated && (
+              <div className="text-white/50 text-[10px]">
+                Updated: {lastUpdated.toLocaleTimeString()}
+              </div>
+            )}
           </div>
         </div>
 
@@ -471,6 +454,37 @@ const TradeCard = () => {
             "Trade"
           )}
         </Button>
+
+        {/* Updated Proof Explorer Link with better styling */}
+        <div className="flex justify-center">
+          <a
+            href={`https://testnet.succinct.xyz/explorer/requester/${
+              import.meta.env.VITE_PROVER_KEY
+            }`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group flex items-center gap-2 text-xs text-[#8be9fd]/70 hover:text-[#8be9fd] transition-colors py-2 px-4 rounded-md bg-black/20 border border-[#8be9fd]/10 hover:border-[#8be9fd]/30"
+          >
+            <span className="font-medium">Proof explorer:</span>
+            <span className="text-white/50 group-hover:text-white/70 transition-colors">
+              testnet.succinct.xyz/explorer
+            </span>
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="relative top-[0.5px] ml-0.5 opacity-70 group-hover:opacity-100 transition-opacity"
+            >
+              <path d="M7 17L17 7" />
+              <path d="M7 7h10v10" />
+            </svg>
+          </a>
+        </div>
       </div>
 
       {activeStep >= 0 && (
@@ -497,6 +511,15 @@ const TradeCard = () => {
           </div>
         </div>
       )}
+
+      {renderServerSettings()}
+
+      <useObsidianTrade
+        authenticated={authenticated}
+        blockNumber={blockNumber}
+        addLog={addLog}
+        orderServerUrl={orderServerUrl}
+      />
     </div>
   );
 };

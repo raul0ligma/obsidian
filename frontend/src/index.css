@@ -316,7 +316,7 @@ body {
   position: fixed;
   bottom: 0px;
   left: 0px;
-  width: 200px;
+  width: 225px;
   height: auto;
   z-index: 1;
   animation: float 4s ease-in-out infinite;
