@@ -292,7 +292,7 @@ const TradeCard = () => {
   return (
     <div className="glass card-shadow w-full border border-neutral-100">
       <div className="px-4 py-3 flex justify-between items-center border-b border-neutral-100">
-        <h2 className="text-lg font-medium">Swap</h2>
+        <h2 className="text-lg font-medium">TRADE</h2>
 
         <div className="flex items-center gap-4">
           {/* Block Number */}
