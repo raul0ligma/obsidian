@@ -58,7 +58,7 @@ const Index = () => {
       </main>
 
       <img
-        src="/public/pep.png"
+        src="/pep.png"
         alt="Mascot"
         className="floating-character relative"
       />
