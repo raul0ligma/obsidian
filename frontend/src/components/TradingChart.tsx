@@ -5,7 +5,6 @@ const TradingChart = () => {
     <div className="glass card-shadow w-full h-full border border-neutral-100">
       <div className="px-4 py-3 flex justify-between items-center border-b border-neutral-100">
         <h2 className="text-lg font-medium">POOL STATUS</h2>
-        <div className="text-xs">Powered by GeckoTerminal</div>
       </div>
 
       <div className="w-full h-[600px]">
