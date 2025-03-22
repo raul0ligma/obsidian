@@ -48,13 +48,12 @@ contract ObsidianRouter {
 
         ObsidianOrder memory order = abi.decode(_publicValues, (ObsidianOrder));
 
-        console.log(order.block_number);
-        // bytes32 actualBlockHash = blockhash(order.block_number);
-        // require(actualBlockHash != bytes32(0), "Block is too old");
-        // require(
-        //     actualBlockHash == order.block_hash,
-        //     "Block hash does not match"
-        // );
+        bytes32 actualBlockHash = blockhash(order.block_number);
+        require(actualBlockHash != bytes32(0), "Block is too old");
+        require(
+            actualBlockHash == order.block_hash,
+            "Block hash does not match"
+        );
 
         require(
             IERC20(order.buy_token).transferFrom(
