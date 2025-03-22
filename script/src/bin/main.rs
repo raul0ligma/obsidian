@@ -60,12 +60,12 @@ async fn main() {
 
     let args = Args::parse();
 
-    let rpc_url = "https://eth.llamarpc.com";
+    let rpc_url = "https://base.llamarpc.com";
     let uniswap_storage_slot = vec![b256!(
         "0000000000000000000000000000000000000000000000000000000000000008"
     )];
 
-    let pool_address = address!("0xAE461cA67B15dc8dc81CE7615e0320dA1A9aB8D5");
+    let pool_address = address!("0x88a43bbdf9d098eec7bceda4e2494615dfd9bb9c");
     let provider = ProviderBuilder::new().on_http(reqwest::Url::from_str(rpc_url).unwrap());
     let latest = provider
         .get_block_by_number(rpc::types::BlockNumberOrTag::Latest)
@@ -123,11 +123,11 @@ async fn main() {
     }
 
     let swap_payload = SwapInput {
-        sell_amount: U256::from(5000000).to_be_bytes_vec(),
+        sell_amount: U256::from(1000000).to_be_bytes_vec(),
         sell_token0: false,
-        sell_token: address!("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48").to_vec(),
-        buy_token: address!("0x6B175474E89094C44Da98b954EedeAC495271d0F").to_vec(),
-        seller: address!("0xd4f23AfEAcfc05399E58e122B9a23cD04FA02C3B").to_vec(),
+        sell_token: address!("0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913").to_vec(),
+        buy_token: address!("0x4200000000000000000000000000000000000006").to_vec(),
+        seller: address!("0xbeFE5E6Df5F3E4CBa02b11bA233f6584F295b96d").to_vec(),
     };
     if args.local {
         let out = obsidian_lib::verifier::MPTVerifier::verify_slot(inputs).unwrap();
